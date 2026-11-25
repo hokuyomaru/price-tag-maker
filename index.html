@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>北洋丸 値札メーカー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link id="gf" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@900&family=Zen+Antique&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
+<style>
+/*
+VOICE: 店頭で使う道具。迷わず、速く、きれいに刷れる。
+IDEA: 漁師の作業台に置いた紙と赤マーカー。左で書き、右に刷り上がりが並ぶ。
+PICTURE: 右側のA4プレビューそのもの（値札は2枚割付、ポップは1枚）。
+COLOUR and TYPE: 生成りの紙・墨・北洋丸の赤。UIは Zen Kaku Gothic、作品は筆文字＋明朝。
+LAYOUT: 上にタブ、左に入力パネル、右に大きなプレビュー。600px以下は縦積み。
+*/
+:root{color-scheme:light dark;
+--bg:light-dark(#f3efe6,#16130f);--panel:light-dark(#fff,#211d18);--ink:light-dark(#1d1a16,#efe9dd);
+--mute:light-dark(#6d665b,#a89f90);--line:light-dark(#ddd5c6,#3a342c);--red:#c8161d;--red2:light-dark(#c8161d,#ff5a52);
+--field:light-dark(#fff,#2a251f);--chip:light-dark(#efe8da,#2e2821)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",sans-serif;overflow-x:clip}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:12px 24px;padding:14px max(3vw,16px);border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:5}
+h1{font:700 20px/1.2 "Zen Kaku Gothic New",sans-serif;margin:0;display:flex;align-items:center;gap:10px}
+h1 i{display:inline-block;width:12px;height:28px;background:var(--red);border-radius:2px}
+nav{display:flex;gap:6px;flex-wrap:wrap}
+nav button{font-weight:700;font-size:15px;line-height:1;font-family:inherit;padding:12px 18px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer;min-height:44px}
+nav button[aria-selected=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.out{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.btn{font-weight:700;font-size:15px;line-height:1;font-family:inherit;min-height:44px;padding:0 18px;border-radius:10px;border:1px solid var(--line);background:var(--field);color:var(--ink);cursor:pointer;white-space:nowrap}
+.btn.pri{background:var(--red);border-color:var(--red);color:#fff}
+.btn.sm{min-height:36px;padding:0 12px;font-size:14px;border-radius:8px}
+.btn:focus-visible,nav button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--red2);outline-offset:2px}
+main{display:grid;grid-template-columns:minmax(0,440px) minmax(0,1fr);gap:0;min-height:calc(100vh - 73px)}
+.panel{padding:20px max(2vw,16px) 60px;border-right:1px solid var(--line);background:var(--panel)}
+.view{padding:24px max(3vw,16px) 60px;display:flex;flex-direction:column;align-items:center;gap:20px}
+@media(min-width:861px){.view{position:sticky;top:73px;align-self:start;max-height:calc(100vh - 73px);overflow-y:auto}}
+.view .sheet{width:min(100%,560px);position:relative}
+.view canvas{width:100%;height:auto;display:block;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.12),0 12px 30px rgba(60,40,10,.14);border-radius:2px}
+.sheet .cap{font-size:13px;color:var(--mute);margin:0 0 6px}
+.hide{display:none!important}
+h2{font-size:15px;margin:22px 0 10px;color:var(--mute);font-weight:700}
+h2:first-child{margin-top:0}
+label{display:block;font-size:14px;font-weight:700;margin:12px 0 4px}
+label small{font-weight:400;color:var(--mute)}
+input[type=text],input[type=search],select,textarea{width:100%;font-size:16px;line-height:1.4;font-family:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--field);color:var(--ink);min-height:44px}
+textarea{min-height:110px;resize:vertical}
+input[type=range]{width:100%;accent-color:var(--red)}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
+.row label{margin-top:8px}
+.chk{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;min-height:44px;margin:4px 0}
+.chk input{width:20px;height:20px;accent-color:var(--red)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:14px;line-height:1.2;font-family:inherit;padding:9px 12px;border-radius:999px;border:1px solid var(--line);background:var(--chip);color:var(--ink);cursor:pointer;min-height:36px}
+.chip:hover{border-color:var(--red2)}
+.tag{border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0;background:light-dark(#faf8f4,#2a251f)}
+.upl{display:inline-flex;align-items:center;margin-top:10px;cursor:pointer}
+.tag .hd{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.tag .hd b{font-size:14px;margin-right:auto}
+.tag .row{grid-template-columns:repeat(2,minmax(0,1fr))}
+.tag .row label{margin:6px 0 2px;font-size:13px}
+.ic{width:36px;height:36px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer;font-size:15px}
+.hint{font-size:13px;color:var(--mute);margin:6px 0 0}
+.hint em{font-style:normal;color:var(--red2);font-weight:700}
+.lib{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+.ph{border:2px solid transparent;border-radius:10px;padding:0;background:var(--field);cursor:pointer;text-align:left;color:var(--ink);overflow:hidden;font-family:inherit}
+.ph[aria-pressed=true]{border-color:var(--red)}
+.ph .im{aspect-ratio:4/3;background:#2a1a1a center/cover no-repeat;display:grid;place-items:center;color:#cbb;font-size:12px}
+.ph .im.cut{background-size:contain;background-color:#3a1517}
+.ph span{display:block;padding:6px 8px;font-size:13px;font-weight:700}
+.found{display:flex;gap:10px;align-items:center;background:var(--chip);border-radius:10px;padding:8px 10px;margin-top:8px;font-size:14px}
+.found .im{width:56px;height:42px;border-radius:6px;background:#2a1a1a center/cover no-repeat;flex:none}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:12px 18px;border-radius:10px;font-size:14px;z-index:20;max-width:90vw;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+.ai{border:1px dashed var(--line);border-radius:12px;padding:12px;margin-top:14px}
+.aiopt{border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:8px;background:var(--field);cursor:pointer;font-size:14px;width:100%;text-align:left;color:var(--ink);font-family:inherit}
+.aiopt b{display:block;color:var(--red2)}
+.busy{opacity:.55;pointer-events:none}
+#printArea{display:none}
+@media print{body>*:not(#printArea){display:none!important}#printArea{display:block}#printArea img{width:210mm;height:297mm;display:block;page-break-after:always}@page{size:A4;margin:0}}
+@media(max-width:860px){main{grid-template-columns:1fr}.panel{border-right:0;border-bottom:1px solid var(--line)}.out{margin-left:0;width:100%}.out .btn{flex:1}}
+@media(prefers-reduced-motion:reduce){.toast{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1><i></i>北洋丸 値札メーカー</h1>
+  <div class="out">
+    <button class="btn" id="printBtn">印刷</button>
+    <button class="btn pri" id="pdfBtn">PDFで保存</button>
+  </div>
+</header>
+
+<main>
+<section class="panel">
+  <!-- 値札 -->
+  <div id="p-tag">
+    <h2>よく使う商品から追加</h2>
+    <div class="chips" id="presetChips"></div>
+    <p class="hint">押すと下の一覧に追加されます。2枚でA4縦1枚、真ん中で切れば2つの値札になります。</p>
+    <h2>値札の一覧 <span id="tagCount"></span></h2>
+    <div id="tagList"></div>
+    <div class="chips" style="margin-top:8px">
+      <button class="btn sm" id="addTag">＋ 空の値札を追加</button>
+      <button class="btn sm" id="clearTags">全部消す</button>
+    </div>
+    <p class="hint">商品名は10文字まで。スペースを入れると少し間があきます（例：桜鱒 柵）。「一言」をオンにすると、商品名の横に小さく一言（20文字まで）が入ります。</p>
+    <h2>設定</h2>
+    <label class="chk"><input type="checkbox" id="tComma"> 金額に3桁カンマを付ける</label>
+  </div>
+
+</section>
+
+<section class="view" id="view" aria-live="polite"></section>
+</main>
+<div id="printArea"></div>
+<div class="toast" id="toast" role="status"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+{
+/* ========== データ ========== */
+/* 書体は固定（変えるときはここだけ） */
+const BRUSH_FONT="Zen Old Mincho",BRUSH_W=900,MIN_FONT="Zen Antique",BOLD=.008;
+const COLORS={red:["赤","#d4141e"],ai:["藍","#1f3d6e"],cha:["茶","#9a6b1c"]};
+const fixColor=c=>c==="kin"?"cha":COLORS[c]?c:"red";
+const PRESET0=[
+ {label:"骨抜き",name:"鮭フライ",weight:"150g",price:"450"},
+ {label:"",name:"桜鱒 柵",weight:"100g",price:"450"},
+ {label:"",name:"桜鱒ハラス",weight:"150g",price:"500"},
+ {label:"",name:"桜鱒カマ",weight:"160g",price:"450"},
+ {label:"骨抜き",name:"桜鱒切り身",weight:"2切れ",price:"400"},
+ {label:"",name:"いくら",weight:"300g",price:"3500"}
+];
+const LABELS=["骨抜き","限定","おすすめ","冷凍","数量限定","本日のみ"];
+
+/* ========== 保存 ========== */
+const ls={get(k,d){try{const v=localStorage.getItem("hy_"+k);return v?JSON.parse(v):d}catch{return d}},set(k,v){try{localStorage.setItem("hy_"+k,JSON.stringify(v))}catch{}}};
+let tags=ls.get("tags",PRESET0.map(p=>({...p,color:"red"})));
+let presets=ls.get("presets",PRESET0);
+let tset={comma:!!ls.get("tset",{}).comma};
+tags.forEach(t=>{t.color=fixColor(t.color);t.name=String(t.name||"").replace(/\n/g," ").slice(0,10)});
+const tab="tag";
+
+/* ========== フォント ========== */
+async function fontsFor(list){ // list: [[family, weight, text]]
+  await Promise.all(list.map(([f,w,t])=>document.fonts.load(`${w||400} 40px "${f}"`,t||"あ").catch(()=>{})));
+}
+
+/* ========== 縦書きエンジン ========== */
+const ROT=new Set([..."ー－—―〜～…‥（）()「」『』【】〔〕［］[]＜＞<>〈〉《》｛｝{}=＝→←-"]);
+const PUNCT=new Set([..."、。，．"]);
+const HANG=new Set([..."、。，．」）』"]);
+const SMALL=new Set([..."ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ"]);
+function parse(text,markup){const out=[];let red=false,dot=false;
+  for(const c of String(text||"")){
+    if(markup){if(c==="【"){red=true;continue}if(c==="】"){red=false;continue}if(c==="《"){red=true;dot=true;continue}if(c==="》"){red=false;dot=false;continue}}
+    out.push({c,red,dot})}return out}
+function tokenize(chars,o){const t=[];
+  for(let i=0;i<chars.length;i++){const ch=chars[i];
+    if(ch.c==="\r")continue;
+    if(ch.c==="\n"){t.push({br:true});continue}
+    if(/[0-9]/.test(ch.c)){let j=i;while(j<chars.length&&/[0-9]/.test(chars[j].c))j++;
+      const run=chars.slice(i,j);
+      if(run.length<=3)t.push({...ch,c:run.map(x=>x.c).join(""),tcy:run.length>1,adv:1});
+      else run.forEach(x=>t.push({...x,adv:.8}));
+      i=j-1;continue}
+    if(ch.c===" "||ch.c==="　"){if(o.spaceBreak)t.push({br:true});else t.push({...ch,sp:true,adv:ch.c===" "?o.spaceAdv:o.spaceAdv*1.4});continue}
+    t.push({...ch,adv:/[\x21-\x7e]/.test(ch.c)&&!ROT.has(ch.c)?.75:1})}
+  return t}
+function layout(toks,maxH,wrap){const cols=[[]];let h=0;
+  for(let i=0;i<toks.length;i++){const t=toks[i];
+    if(t.br){cols.push([]);h=0;continue}
+    let cur=cols[cols.length-1];
+    if(wrap&&t.red&&!(toks[i-1]&&toks[i-1].red)&&cur.length){let run=0;for(let j=i;j<toks.length&&toks[j].red&&!toks[j].br;j++)run+=toks[j].adv;
+      if(h+run>maxH+1e-6&&run<=maxH){cols.push([]);h=0;cur=cols[cols.length-1]}}
+    if(wrap&&h+t.adv>maxH+1e-6&&cur.length){
+      if(HANG.has(t.c)){cur.push({...t,hang:true});continue}
+      if(t.sp)continue;
+      cols.push([]);h=0;cur=cols[cols.length-1]}
+    cur.push(t);h+=t.adv}
+  return cols.map(c=>({toks:c,h:c.reduce((a,t)=>a+(t.hang?0:t.adv),0)}))}
+/* box: {x,y,w,h} (mm)。fs(mm)を最大から縮めて収まる大きさを探す */
+function fitV(text,box,o){
+  const toks=tokenize(parse(text,o.markup),o);let fs=o.max,res;
+  while(true){const cols=layout(toks,box.h/fs,o.wrap);
+    const W=fs*(1+(cols.length-1)*o.pitch),H=Math.max(0,...cols.map(c=>c.h))*fs;
+    res={fs,cols,W,H};
+    if(W<=box.w+1e-6&&H<=box.h+1e-6)break;
+    if(fs<=o.min)break;fs=Math.max(o.min,fs*.96)}
+  return res}
+function cellFont(o,fs,S){return `${o.weight||400} ${fs*S}px "${o.font}", "Hiragino Mincho ProN", serif`}
+function drawCell(ctx,S,t,cx,cy,fs,o){
+  const col=t.red?o.red:o.color;
+  ctx.save();ctx.font=cellFont(o,fs,S);ctx.textAlign="center";ctx.textBaseline="middle";
+  const X=cx*S,Y=cy*S;
+  ctx.translate(X,Y);
+  let dx=0,dy=0;
+  if(ROT.has(t.c))ctx.rotate(Math.PI/2);
+  else if(PUNCT.has(t.c)){dx=fs*.55*S;dy=-fs*.5*S}
+  else if(SMALL.has(t.c)){dx=fs*.1*S;dy=-fs*.1*S}
+  if(t.tcy){const w=ctx.measureText(t.c).width;const k=Math.min(1,fs*S*.98/w);ctx.scale(k,1)}
+  const pass=(lw,c)=>{if(lw>0){ctx.lineWidth=lw;ctx.strokeStyle=c;ctx.lineJoin="round";ctx.strokeText(t.c,dx,dy)}};
+  if(o.shadow){ctx.shadowColor="rgba(0,0,0,.55)";ctx.shadowBlur=fs*S*.12;ctx.shadowOffsetY=fs*S*.03}
+  if(o.outline)pass(o.outline*fs*S,o.outlineColor||"#fff");
+  ctx.shadowColor="transparent";
+  pass((o.bold||0)*fs*S,col);
+  ctx.fillStyle=col;ctx.fillText(t.c,dx,dy);
+  ctx.restore();
+  if(t.dot&&!ROT.has(t.c)&&!PUNCT.has(t.c)){ctx.fillStyle=col;ctx.beginPath();ctx.arc((cx+fs*.66)*S,cy*S,fs*.075*S,0,Math.PI*2);ctx.fill()}
+}
+function drawV(ctx,S,res,box,o){
+  const{fs,cols,W,H}=res;
+  const xr=o.halign==="right"?box.x+box.w:box.x+(box.w+W)/2;
+  const y0=o.valign==="center"?box.y+(box.h-H)/2:box.y;
+  cols.forEach((c,i)=>{const cx=xr-fs/2-i*fs*o.pitch;let acc=0;
+    const cy0=o.colAlign==="center"?y0+(H-c.h*fs)/2:y0;
+    for(const t of c.toks){const cy=cy0+(acc+(t.hang?.5:t.adv/2))*fs;if(!t.sp)drawCell(ctx,S,t,cx,cy,fs,o);if(!t.hang)acc+=t.adv}})}
+function textW(ctx,S,s,font,fs,weight){ctx.font=`${weight||400} ${fs*S}px "${font}", serif`;return ctx.measureText(s).width/S}
+
+/* ========== 値札（A4縦に2枚） ========== */
+const fmtPrice=p=>{const s=String(p||"").replace(/[，,円\s]/g,"").replace(/[０-９]/g,d=>String.fromCharCode(d.charCodeAt(0)-65248));return tset.comma&&/^\d+$/.test(s)?Number(s).toLocaleString("ja-JP"):s};
+function tagTexts(t){return[[BRUSH_FONT,BRUSH_W,(t.name||"")+(t.label||"")+(t.noteOn?t.note||"":"")],[MIN_FONT,400,"（）0123456789,円gkmlLx個本切れ尾枚パック入"+(t.weight||"")+fmtPrice(t.price)]]}
+function drawTag(ctx,S,x0,t){
+  const W=105,H=297,m=7,lw=3.2,col=(COLORS[t.color]||COLORS.red)[1];
+  const note=t.noteOn?String(t.note||"").trim():"";
+  ctx.fillStyle="#fff";ctx.fillRect(x0*S,0,W*S,H*S);
+  if(!t.name&&!t.price&&!t.weight&&!t.label&&!note)return;
+  ctx.strokeStyle=col;ctx.lineWidth=lw*S;ctx.strokeRect((x0+m+lw/2)*S,(m+lw/2)*S,(W-2*m-lw)*S,(H-2*m-lw)*S);
+  const inX=x0+m+lw,inW=W-2*(m+lw);
+  // 赤い札：文字を札いっぱいに
+  let top=m+lw+12;
+  if(t.label){const bh=18,by=m+lw+8,padX=4.5,maxW=inW-8;let fs=13.5;let tw=textW(ctx,S,t.label,BRUSH_FONT,fs,BRUSH_W);
+    if(tw+padX*2>maxW){fs*=(maxW-padX*2)/tw;tw=maxW-padX*2}
+    const bw=tw+padX*2,bx=x0+W/2-bw/2;
+    ctx.fillStyle=col;ctx.beginPath();ctx.roundRect(bx*S,by*S,bw*S,bh*S,bh/2*S);ctx.fill();
+    ctx.save();ctx.font=`${BRUSH_W} ${fs*S}px "${BRUSH_FONT}", serif`;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillStyle="#fff";
+    ctx.translate((x0+W/2)*S,(by+bh/2+.4)*S);ctx.lineWidth=BOLD*fs*S;ctx.strokeStyle="#fff";ctx.lineJoin="round";ctx.strokeText(t.label,0,0);
+    ctx.fillText(t.label,0,0);ctx.restore();top=by+bh+8}
+  // 金額・内容量（先に大きさを決める）
+  const price=fmtPrice(t.price);let pfs=29,yfs=11,wfs=10,gap=4;const base=H-m-lw-13;let pw=0,yw=0,gx=0;
+  if(price){pw=textW(ctx,S,price,MIN_FONT,pfs);yw=textW(ctx,S,"円",MIN_FONT,yfs);
+    const maxW=inW-8;if(pw+1.2+yw>maxW){const k=(maxW-yw-1.2)/pw;pfs*=k;pw*=k}
+    gx=x0+W/2-(pw+1.2+yw)/2}
+  const wBase=price?base-pfs*.78-gap:base;
+  let bottom=H-m-lw-14;if(price)bottom=base-pfs*.8;if(t.weight)bottom=wBase-wfs*.9;bottom-=7;
+  // 商品名（＋一言）
+  const o={font:BRUSH_FONT,weight:BRUSH_W,max:44,min:8,pitch:1.12,markup:false,wrap:false,spaceAdv:.45,color:"#151311",red:col,bold:BOLD,halign:"center",valign:"center",colAlign:"top"};
+  const box={x:inX+5,y:top,w:inW-10,h:bottom-top};
+  if(t.name&&!note)drawV(ctx,S,fitV(t.name,box,o),box,o);
+  else if(note){const nr=t.name?fitV(t.name,{x:0,y:0,w:box.w*.64,h:box.h},o):{fs:0,W:0,H:0,cols:[]};
+    const on={...o,color:col,max:Math.max(6,Math.min(15,(nr.fs||30)*.42)),min:4};
+    const offY=nr.fs*.6;const tr=fitV(note,{x:0,y:0,w:box.w*.3,h:box.h-offY},on);
+    const g=nr.W?4.5:0,gw=nr.W+g+tr.W,xl=box.x+(box.w-gw)/2,gh=Math.max(nr.H,tr.H+offY),y0=box.y+(box.h-gh)/2;
+    drawV(ctx,S,tr,{x:xl,y:y0+offY,w:tr.W,h:tr.H},{...on,halign:"right",valign:"top"});
+    if(nr.W)drawV(ctx,S,nr,{x:xl+tr.W+g,y:y0,w:nr.W,h:nr.H},{...o,halign:"right",valign:"top"})}
+  ctx.fillStyle="#151311";ctx.textBaseline="alphabetic";ctx.textAlign="left";
+  if(price){ctx.font=`${pfs*S}px "${MIN_FONT}", serif`;ctx.fillText(price,gx*S,base*S);
+    ctx.font=`${yfs*S}px "${MIN_FONT}", serif`;ctx.fillText("円",(gx+pw+1.2)*S,base*S)}
+  if(t.weight){const s="（"+t.weight.replace(/^[（(]|[）)]$/g,"")+"）";
+    const ww=textW(ctx,S,s,MIN_FONT,wfs);const wx=price?gx-wfs*.45:x0+W/2-ww/2;
+    ctx.font=`${wfs*S}px "${MIN_FONT}", serif`;ctx.fillText(s,wx*S,wBase*S)}
+}
+function drawTagPage(ctx,S,pair,guide){
+  ctx.fillStyle="#fff";ctx.fillRect(0,0,210*S,297*S);
+  drawTag(ctx,S,0,pair[0]||{});drawTag(ctx,S,105,pair[1]||{});
+  if(guide){ctx.save();ctx.strokeStyle="#9a958c";ctx.lineWidth=.25*S;ctx.setLineDash([2*S,2*S]);ctx.beginPath();ctx.moveTo(105*S,0);ctx.lineTo(105*S,297*S);ctx.stroke();ctx.restore();
+  }
+}
+
+/* ========== 描画管理 ========== */
+const view=document.getElementById("view");
+let gen=0;
+const pairs=()=>{const p=[];for(let i=0;i<tags.length;i+=2)p.push([tags[i],tags[i+1]]);return p.length?p:[[{},{}]]};
+async function render(){
+  const my=++gen;
+  {await fontsFor(tags.flatMap(tagTexts));if(my!==gen)return;
+    const ps=pairs();view.innerHTML="";
+    ps.forEach((pr,i)=>{const d=document.createElement("div");d.className="sheet";const cap=document.createElement("p");cap.className="cap";
+      cap.textContent=`${i+1}枚目 ／ 左：${pr[0]?.name||"（空き）"}　右：${pr[1]?.name||"（空き）"}`.replace(/\n/g," ");
+      const c=document.createElement("canvas");const S=3.2;c.width=210*S;c.height=297*S;drawTagPage(c.getContext("2d"),S,pr,true);d.append(cap,c);view.append(d)})}
+}
+let rt;const rerender=()=>{clearTimeout(rt);rt=setTimeout(render,120)};
+
+/* ========== 書き出し ========== */
+async function pagesHiRes(){const S=11.8;const out=[];// 約300dpi
+  {await fontsFor(tags.flatMap(tagTexts));for(const pr of pairs()){const c=document.createElement("canvas");c.width=210*S;c.height=297*S;drawTagPage(c.getContext("2d"),S,pr,true);out.push(c)}}
+  return out}
+const stamp=()=>{const d=new Date();return `${d.getMonth()+1}${String(d.getDate()).padStart(2,"0")}`};
+const fname=ext=>`値札_${tags.length}枚_${stamp()}.${ext}`;
+let DL=null;
+(async()=>{try{if(window.claude&&window.claude.use)DL=await window.claude.use("downloads")}catch{}})();
+const inFrame=(()=>{try{return window.self!==window.top}catch{return true}})();
+async function saveBlob(blob,name,msg){
+  if(DL){try{await DL.save({filename:name,data:blob});toast(msg||"保存しました");return}
+    catch(e){if(e&&e.code==="declined")return toast("保存をキャンセルしました");if(e&&e.code==="host_unavailable")return toast("この画面では保存できません。パソコンのブラウザで開いてください");}}
+  if(!inFrame){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);toast(msg||"保存しました");return}
+  toast("この画面では保存できません。ページを単独で開いてください")}
+const busy=(b,on)=>b.classList.toggle("busy",on);
+document.getElementById("pdfBtn").onclick=async e=>{const b=e.currentTarget;busy(b,true);toast("PDFを作っています…");
+  try{await savePdf()}catch(err){toast("PDFを作れませんでした："+(err&&err.message||err))}busy(b,false)};
+async function savePdf(msg){const cs=await pagesHiRes();const pdf=new window.jspdf.jsPDF({unit:"mm",format:"a4",orientation:"portrait",compress:true});
+  cs.forEach((c,i)=>{if(i)pdf.addPage();pdf.addImage(c.toDataURL("image/jpeg",.92),"JPEG",0,0,210,297,undefined,"FAST")});
+  await saveBlob(pdf.output("blob"),fname("pdf"),msg)}
+const printBtn=document.getElementById("printBtn");
+printBtn.onclick=async e=>{const b=e.currentTarget;busy(b,true);
+  if(inFrame){ // Claudeの画面内ではブラウザが直接印刷を止めるため、PDFを開いて印刷してもらう
+    try{await savePdf("PDFを保存しました。開いて印刷してください（Claudeの画面内では直接印刷できません）")}catch{toast("印刷用PDFを作れませんでした")}busy(b,false);return}
+  const cs=await pagesHiRes();busy(b,false);const pa=document.getElementById("printArea");pa.innerHTML="";
+  cs.forEach(c=>{const i=document.createElement("img");i.src=c.toDataURL("image/jpeg",.92);pa.append(i)});setTimeout(()=>window.print(),300)};
+
+/* ========== UI共通 ========== */
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let tt;function toast(m){const t=$("toast");t.textContent=m;t.classList.add("on");clearTimeout(tt);tt=setTimeout(()=>t.classList.remove("on"),2600)}
+function fillSelect(el,obj,val){el.innerHTML=Object.entries(obj).map(([k,v])=>`<option value="${esc(k)}">${esc(Array.isArray(v)?v[0]:v)}</option>`).join("");el.value=val}
+/* ========== 値札UI ========== */
+const saveTags=()=>{ls.set("tags",tags);ls.set("tset",tset);ls.set("presets",presets)};
+function drawPresets(){$("presetChips").innerHTML=presets.map((p,i)=>`<button class="chip" data-i="${i}">${esc(p.name.replace(/\n/g," "))}${p.label?"・"+esc(p.label):""}</button>`).join("")}
+$("presetChips").onclick=e=>{const b=e.target.closest(".chip");if(!b)return;tags.push({...presets[b.dataset.i],color:"red"});saveTags();drawTags();rerender();toast("追加しました")};
+function drawTags(){
+  $("tagCount").textContent=`（${tags.length}枚・A4 ${Math.max(1,Math.ceil(tags.length/2))}枚分）`;
+  $("tagList").innerHTML=tags.map((t,i)=>`<div class="tag" data-i="${i}">
+   <div class="hd"><b>${Math.floor(i/2)+1}枚目の${i%2?"右":"左"}</b>
+    <button class="ic" data-a="up" aria-label="上へ">↑</button><button class="ic" data-a="down" aria-label="下へ">↓</button>
+    <button class="ic" data-a="dup" aria-label="複製">⧉</button><button class="ic" data-a="save" aria-label="よく使う商品に登録" title="よく使う商品に登録">★</button><button class="ic" data-a="del" aria-label="削除">×</button></div>
+   <label>商品名 <small>（10文字まで）</small></label><input type="text" data-k="name" maxlength="10" value="${esc(t.name||"")}">
+   <label class="chk"><input type="checkbox" data-k="noteOn"${t.noteOn?" checked":""}> 一言を入れる</label>
+   ${t.noteOn?`<input type="text" data-k="note" maxlength="20" value="${esc(t.note||"")}" placeholder="例：おつまみにもおすすめ（20文字まで）">`:""}
+   <div class="row">
+    <div><label>内容量</label><input type="text" data-k="weight" value="${esc(t.weight||"")}" placeholder="150g"></div>
+    <div><label>金額（円）</label><input type="text" data-k="price" inputmode="numeric" value="${esc(t.price||"")}" placeholder="450"></div>
+    <div><label>上の赤い札</label><input type="text" data-k="label" value="${esc(t.label||"")}" placeholder="骨抜き など" list="labelList"></div>
+    <div><label>枠の色</label><select data-k="color">${Object.entries(COLORS).map(([k,v])=>`<option value="${k}"${t.color===k?" selected":""}>${v[0]}</option>`).join("")}</select></div>
+   </div></div>`).join("")+`<datalist id="labelList">${LABELS.map(l=>`<option value="${esc(l)}">`).join("")}</datalist>`}
+$("tagList").addEventListener("input",e=>{const el=e.target,k=el.dataset.k;if(!k)return;const i=+el.closest(".tag").dataset.i;
+  if(el.type==="checkbox"){tags[i][k]=el.checked;saveTags();drawTags();rerender();if(el.checked){const n=$("tagList").querySelector(`.tag[data-i="${i}"] [data-k=note]`);n&&n.focus()}return}
+  tags[i][k]=el.value;saveTags();rerender()});
+$("tagList").addEventListener("click",e=>{const b=e.target.closest("[data-a]");if(!b)return;const i=+b.closest(".tag").dataset.i,a=b.dataset.a;
+  if(a==="up"&&i>0)[tags[i-1],tags[i]]=[tags[i],tags[i-1]];
+  else if(a==="down"&&i<tags.length-1)[tags[i+1],tags[i]]=[tags[i],tags[i+1]];
+  else if(a==="dup")tags.splice(i+1,0,{...tags[i]});
+  else if(a==="del")tags.splice(i,1);
+  else if(a==="save"){const t=tags[i];if(!t.name)return toast("商品名を入れてください");const{label,name,weight,price,noteOn,note}=t;presets=presets.filter(p=>p.name!==name);presets.push({label,name,weight,price,noteOn,note});drawPresets();saveTags();return toast("よく使う商品に登録しました")}
+  saveTags();drawTags();rerender()});
+$("addTag").onclick=()=>{tags.push({label:"",name:"",weight:"",price:"",color:"red"});saveTags();drawTags();rerender();const l=$("tagList").querySelector(".tag:last-of-type [data-k=name]");l&&l.focus()};
+let clr=0;$("clearTags").onclick=e=>{if(Date.now()-clr>3000){clr=Date.now();e.currentTarget.textContent="もう一度押すと消えます";setTimeout(()=>$("clearTags").textContent="全部消す",3000);return}tags=[];saveTags();drawTags();rerender();$("clearTags").textContent="全部消す"};
+$("tComma").checked=tset.comma;
+$("tComma").onchange=e=>{tset.comma=e.target.checked;saveTags();rerender()};
+
+/* ========== 起動 ========== */
+drawPresets();drawTags();render();
+document.fonts.ready.then(()=>rerender());
+}
+</script>
+</body>
+</html>
